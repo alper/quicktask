@@ -3,7 +3,7 @@
  * QuickTask: The Alfred Workflow for Asana
  *
  * Author: Mannie Schumpert http://mannieschumpert.com
- * Version: 2.1
+ * Version: 2.03
  */
 require('workflows.php');
 
@@ -33,7 +33,7 @@ class Asana {
 	 */
 	public function key($apikey){
 
-		exec("curl -u ".$apikey.": https://app.asana.com/api/1.0/users/me",$return);
+		exec('curl -H "Authorization: Bearer' . $apikey . '" https://app.asana.com/api/1.0/users/me', $return);
 		$return = json_decode($return[0],true);
 
 		if ($return['errors']):
@@ -108,7 +108,7 @@ class Asana {
 			exit;
 		endif;
 
-		exec("curl -u ".$apikey.": https://app.asana.com/api/1.0/users/me",$return);
+		exec('curl -H "Authorization: Bearer ' . $apikey . '" https://app.asana.com/api/1.0/users/me', $return);
 		$return = json_decode($return[0],true);
 		$settings['default'] = $return['data']['email'];
 
@@ -127,25 +127,9 @@ class Asana {
 		$settings = self::check_data('workspaces',true);
 		$workspaces = $settings['workspaces'];
 
-		// workspace_filter is used in the new_project function
-		// this checks if that's the current context
-		if ( $settings['new_project_space'] ){
-
-			// return $query;
-			// $this->w->result( $workspace, $workspace, $workspace, '', 'icon.png', 'yes' );
-			if ( $query === '' ):
-				$this->w->result( '', '', 'New project: ', '', 'icon.png', 'yes' );
-			else:
-				$this->w->result( $query, $query, 'New project: '.$query, '', 'icon.png', 'yes' );
-			endif;
-
-		} else {
-
-			foreach ( $workspaces as $workspace => $workspace_id ){
-				if ($query && strpos(strtolower($workspace),strtolower($query)) === false) continue;
-				$this->w->result( $workspace, $workspace, $workspace, '', 'icon.png', 'yes' );
-			}
-
+		foreach ( $workspaces as $workspace => $workspace_id ){
+			if ($query && strpos(strtolower($workspace),strtolower($query)) === false) continue;
+			$this->w->result( $workspace, $workspace, $workspace, '', 'icon.png', 'yes' );
 		}
 
 		echo $this->w->toxml();
@@ -344,72 +328,6 @@ class Asana {
 
 	}
 
-	/**
-	 * Creates new project
-	 *
-	 * Keyword: 'anew'
-	 */
-	public function new_project($query){
-
-		$settings = self::check_data();
-		$new_project_workspace = $settings['new_project_space'];
-
-		// If new_project_space set, create new project
-		if ($new_project_workspace) {
-
-			// Unset temp setting first, to be sure it doesn't interfere with workspace_filter function if API call returns an error
-			unset($settings['new_project_space']);
-			$this->w->write( $settings, $this->file );
-
-			// Add data tags
-			$d = ' -d "workspace='.$settings['workspaces'][$new_project_workspace].'" -d "name='.$query.'"';
-
-			// Send the API call
-			exec( 'curl -u '.$settings['apikey'].': https://app.asana.com/api/1.0/projects' . $d, $return);
-			$return = json_decode($return[0],true);
-
-			// Check for errors
-			if ($return['errors']):
-				echo $return['errors'][0]['message'];
-				exit;
-			endif;
-
-			$return = $return['data'];
-
-			/**
-			 * @todo: Some repeated code. Needs refactoring
-			 */
-			// Assemble project info from API return
-			$project_name = $return['name'];
-			$project_id = $return['id'];
-			$workspace = $return['workspace']['name'];
-			$workspace_id = $return['workspace']['id'];
-			
-			// Save new project to Projects array
-			$new_project = array();
-			$new_project['id'] = "$project_id";
-			$new_project['workspace'] = "$workspace";
-			$new_project['workspace_id'] = "$workspace_id";
-
-			$settings['projects'][$project_name] = $new_project;
-
-			$this->w->write( $settings, $this->file );
-
-			echo $query." project created in " . $new_project_workspace . ".";
-
-		} else {
-
-			// Saves target workspace ID temporarily
-			// $settings['new_project_space'] = $settings['workspaces'][$query];
-			$settings['new_project_space'] = $query;
-			$this->w->write( $settings, $this->file );
-		}
-
-
-
-
-	}
-
 	/** ==============================================================================
 	 * Private functions
 	 * Processing functions called by public functions
@@ -421,14 +339,12 @@ class Asana {
 	private function get_workspaces($apikey){
 
 		// Get workspaces from Asana API
-		exec( 'curl -u '.$apikey.': https://app.asana.com/api/1.0/workspaces', $return);
+		exec( 'curl -H "Authorization: Bearer ' . $apikey . '" https://app.asana.com/api/1.0/workspaces', $return);
 		$return = json_decode($return[0],true);
 		$data = $return['data'];
 
 		// Check if data was returned
-		/**
-		 * @todo: could be extended for more explicit error handling
-		 */
+		// TODO: could be extended for more explicit error handling
 		// if (!$data):
 		// 	return $this->errors['api_error'];
 		// endif;
@@ -455,7 +371,7 @@ class Asana {
 		$projects = array();
 		foreach($workspaces as $workspace => $workspace_id ){
 
-			exec( 'curl -u '.$apikey.': https://app.asana.com/api/1.0/workspaces/'.$workspace_id.'/projects?archived=false', $return);
+			exec( 'curl -H "Authorization: Bearer ' . $apikey . '" https://app.asana.com/api/1.0/workspaces/' . $workspace_id . '/projects', $return);
 			
 			$return = json_decode($return[0],true);
 			$return = $return['data'];
@@ -672,7 +588,7 @@ class Asana {
 		}
 
 		// Send the API call
-		exec( 'curl -u '.$apikey.': https://app.asana.com/api/1.0/tasks' . $d, $return);
+		exec( 'curl -H "Authorization: Bearer ' . $apikey . '" https://app.asana.com/api/1.0/tasks' . $d, $return);
 		$return = json_decode($return[0],true);
 
 		// Check for errors
